@@ -1,0 +1,147 @@
+#!/bin/bash
+
+# Dependencies
+# 1. yt-dlp
+# 2. ffmpeg
+# 3. ffprobe
+
+# Settings
+fileManager="nautilus"
+outputFolder="$HOME/Downloads"
+operationFolder="$outputFolder/tmpDownloads"
+browser="firefox"
+
+# Welcome!
+echo -e "\e[1m→ Download\e[0m"
+
+
+### Questions ###
+
+echo -n "Enter link: "
+read v_link
+
+echo -n "MP3 [y/N]: "
+read v_mp3
+
+echo -n "Crop [y/N]: "
+read v_crop
+if [ "$v_crop" = "y" ]; then
+    echo -n "Start: "
+    read v_time_start
+    echo -n "End: "
+    read v_time_end
+fi
+
+if [ "$v_mp3" != "y" ]; then
+    echo -n "Ratio [#:#]: "
+    read v_ratio
+
+    echo -n "Compress [mb]: "
+    read v_compress
+fi
+
+
+
+
+### Actions ###
+
+Download() {
+
+    # Setup
+    mkdir -p "$operationFolder"
+    mkdir -p "$operationFolder/tmp"
+
+    # Download
+    if [[ "$1" == "audio" ]]; then
+        file=$(yt-dlp --print after_move:filepath -f "bestaudio" --extract-audio --audio-format mp3 -o "$operationFolder/%(title)s.mp3" "$v_link")
+    else # videos
+        file=$(yt-dlp --print after_move:filepath -f bv*+ba/b --merge-output-format mp4 -o "$operationFolder/%(title)s.%(ext)s" "$v_link")
+    fi 
+
+    # Get the extention name
+    local name="$(basename "$file")"
+    ext="${name##*.}"
+
+}
+
+
+Crop() {
+    ffmpeg -ss "$1" -to "$2" -i "$file" -c copy "$operationFolder/tmp/cropped.$ext"
+    mv "$operationFolder/tmp/cropped.$ext" "$file"
+}
+
+
+Ratio() {
+    local ratio_input="${1//:/\/}"
+    
+    ffmpeg -y -i "$file" -vf "crop='if(gt(iw/ih,$ratio_input),ih*($ratio_input),iw)':'if(gt(iw/ih,$ratio_input),ih,iw/($ratio_input))'" \
+    -pix_fmt yuv420p "$operationFolder/tmp/resized.$ext"
+    
+    mv "$operationFolder/tmp/resized.$ext" "$file"
+}
+
+
+Compress() {
+    target_mb="$1"
+
+    # get file size in MB
+    file_size_mb=$(du -m "$file" | cut -f1)
+
+    # skip if already small enough
+    if [ "$file_size_mb" -le "$target_mb" ]; then
+        echo "skip: file already under target size"
+        return
+    fi
+
+    duration=$(ffprobe -v error -show_entries format=duration \
+        -of default=noprint_wrappers=1:nokey=1 "$file")
+
+    audio_bitrate=128
+    total_kbits=$(echo "$target_mb * 8 * 1024" | bc)
+    total_bitrate=$(echo "$total_kbits / $duration" | bc)
+    video_bitrate=$(echo "$total_bitrate - $audio_bitrate" | bc)
+
+    ffmpeg -y -i "$file" -c:v libx264 -b:v "${video_bitrate}k" \
+        -pass 1 -an -f mp4 /dev/null
+
+    ffmpeg -i "$file" -c:v libx264 -b:v "${video_bitrate}k" \
+        -pass 2 -c:a aac -b:a "${audio_bitrate}k" "$operationFolder/tmp/compress.$ext"
+
+    rm -f ffmpeg2pass-0.log*
+
+    mv "$operationFolder/tmp/compress.$ext" "$file"
+}
+
+
+
+# Launch
+if [ "$v_mp3" = "y" ]; then
+    Download "audio"
+
+    if [ "$v_crop" = "y" ]; then
+        Crop "$v_time_start" "$v_time_end"
+    fi
+
+else
+    Download "video"
+
+    if [ "$v_crop" = "y" ]; then
+        Crop "$v_time_start" "$v_time_end"
+    fi
+    if [ -n "$v_ratio" ]; then
+        Ratio "$v_ratio"
+    fi
+    if [ -n "$v_compress" ]; then
+        Compress "$v_compress"
+    fi
+fi
+
+
+
+# Clean
+mv "$file" "$outputFolder" 
+rm -rf "$operationFolder"
+
+# Open at location
+# $fileManager --new-window $outputFolder
+exit
