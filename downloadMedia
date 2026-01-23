@@ -8,8 +8,7 @@
 # Settings
 fileManager="nautilus"
 outputFolder="$HOME/Downloads"
-operationFolder="$outputFolder/tmpDownloads"
-browser="firefox"
+operationFolder="$outputFolder/downloading"
 
 # Welcome!
 echo -e "\e[1m→ Download\e[0m"
@@ -66,7 +65,22 @@ Download() {
 
 
 Crop() {
-    ffmpeg -ss "$1" -to "$2" -i "$file" -c copy "$operationFolder/tmp/cropped.$ext"
+    # Handle the NULL
+    local duration=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$file")
+
+    local start="${1:-0}"
+    local end="${2:-$duration}"
+
+    if (( $(echo "$start < 0" | bc -l) )); then
+        start=0
+    fi
+
+    if (( $(echo "$end > $duration" | bc -l) )); then
+        end="$duration"
+    fi
+
+    # 5. Perform the crop
+    ffmpeg -ss "$start" -to "$end" -i "$file" -c copy "$operationFolder/tmp/cropped.$ext"
     mv "$operationFolder/tmp/cropped.$ext" "$file"
 }
 
@@ -102,10 +116,10 @@ Compress() {
     video_bitrate=$(echo "$total_bitrate - $audio_bitrate" | bc)
 
     ffmpeg -y -i "$file" -c:v libx264 -b:v "${video_bitrate}k" \
-        -pass 1 -an -f mp4 /dev/null
+        -vf "scale=iw/2:ih/2" -pass 1 -an -f mp4 /dev/null
 
     ffmpeg -i "$file" -c:v libx264 -b:v "${video_bitrate}k" \
-        -pass 2 -c:a aac -b:a "${audio_bitrate}k" "$operationFolder/tmp/compress.$ext"
+        -vf "scale=iw/2:ih/2" -pass 2 -c:a aac -b:a "${audio_bitrate}k" "$operationFolder/tmp/compress.$ext"
 
     rm -f ffmpeg2pass-0.log*
 
