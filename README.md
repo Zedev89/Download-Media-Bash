@@ -8,3 +8,7 @@ I tried with: Youtube, Instagram, Facebook
 TIKTOK DOESN'T WORK FOR SOME REASONS
 
 It can do: MP3, Crop, Resize, Compress (kinda shit looking tho)
+
+
+https://github.com/user-attachments/assets/bf37fdc2-d8a8-4c96-bef4-3e3d8df15ffe
+
