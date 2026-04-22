@@ -32,6 +32,9 @@ if [ "$v_crop" = "y" ]; then
 fi
 
 if [ "$v_mp3" != "y" ]; then
+    echo -n "Rotate [90]: "
+    read v_rotate
+
     echo -n "Ratio [#:#]: "
     read v_ratio
 
@@ -82,6 +85,19 @@ Crop() {
     # 5. Perform the crop
     ffmpeg -ss "$start" -to "$end" -i "$file" -c copy "$operationFolder/tmp/cropped.$ext"
     mv "$operationFolder/tmp/cropped.$ext" "$file"
+}
+
+Rotate() {
+    if [[ "$1" == "90" ]]; then
+        ffmpeg -y -i "$file" -vf "transpose=1" "$operationFolder/tmp/rotated.$ext"
+    elif [[ "$1" == "180" ]]; then
+        ffmpeg -y -i "$file" -vf "transpose=1,transpose=1" "$operationFolder/tmp/rotated.$ext"
+    elif [[ "$1" == "270" ]]; then
+        ffmpeg -y -i "$file" -vf "transpose=2" "$operationFolder/tmp/rotated.$ext"
+    else
+        return  # nothing to do
+    fi
+    mv "$operationFolder/tmp/rotated.$ext" "$file"
 }
 
 
@@ -138,7 +154,9 @@ if [ "$v_mp3" = "y" ]; then
 
 else
     Download "video"
-
+    if [ -n "$v_rotate" ]; then
+        Rotate "$v_rotate"
+    fi
     if [ "$v_crop" = "y" ]; then
         Crop "$v_time_start" "$v_time_end"
     fi
